@@ -30,8 +30,38 @@ def raw(pid, **over):
     return base
 
 
+def write_png(path, w, h):
+    import struct, zlib
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)
+    chunk = b"IHDR" + ihdr
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + chunk
+                     + struct.pack(">I", zlib.crc32(chunk)))
+
+
+def fake_gumroad(pages):
+    """Fetcher stub: url -> (status, html) or an exception to raise."""
+    def fetch(url):
+        result = pages.get(url, (404, ""))
+        if isinstance(result, Exception):
+            raise result
+        return result
+    return fetch
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    # Every test gets live-looking Gumroad pages titled after the product id.
+    def fetch(url):
+        slug = url.rsplit("/", 1)[-1]
+        return 200, f"<html><title>{slug.title()} Pack</title></html>"
+    monkeypatch.setattr("contentkit.checks.http_fetch", fetch)
+
+
 @pytest.fixture
 def catalog(tmp_path):
+    for name in ("p1.png", "p2.png"):
+        write_png(tmp_path / name, 1275, 1650)
     data = {"products": [
         raw("abc"),
         raw("xmas", season={"start": "11-15", "end": "12-24"}),
@@ -222,3 +252,82 @@ def test_cli_fails_cleanly_on_bad_catalog(tmp_path, capsys):
     path.write_text(json.dumps([raw("abc", gumroad_url="https://example.com/x")]))
     assert main(["--catalog", str(path), "--out", str(tmp_path)]) == 2
     assert "not a Gumroad product URL" in capsys.readouterr().err
+
+
+# ---- pre-flight checks --------------------------------------------------
+
+from contentkit.checks import check_link, check_previews, image_size, run_checks  # noqa: E402
+
+
+def test_link_check_statuses():
+    import urllib.error
+    p = parse_product(raw("abc"))
+    ok = fake_gumroad({p.gumroad_url: (200, "<title>Abc Pack | Gumroad</title>")})
+    assert check_link(p, ok)[0] == "ok"
+    assert check_link(p, fake_gumroad({}))[0] == "dead"
+    wrong = fake_gumroad({p.gumroad_url: (200, "<title>Halloween Mazes</title>")})
+    assert check_link(p, wrong)[0] == "mismatch"
+    down = fake_gumroad({p.gumroad_url: urllib.error.URLError("timeout")})
+    assert check_link(p, down)[0] == "unreachable"
+    assert check_link(p, fake_gumroad({p.gumroad_url: (503, "")}))[0] == "unreachable"
+
+
+def test_image_size_reads_png_and_jpeg(tmp_path):
+    import struct
+    write_png(tmp_path / "a.png", 1275, 1650)
+    assert image_size(tmp_path / "a.png") == ("png", 1275, 1650)
+    jpg = tmp_path / "b.jpg"
+    app0 = b"\xff\xe0" + struct.pack(">H", 16) + b"JFIF\x00" + b"\x00" * 9
+    sof = b"\xff\xc0" + struct.pack(">HBHH", 17, 8, 1650, 1275) + b"\x00" * 10
+    jpg.write_bytes(b"\xff\xd8" + app0 + sof)
+    assert image_size(jpg) == ("jpeg", 1275, 1650)
+    (tmp_path / "c.png").write_text("not an image")
+    assert image_size(tmp_path / "c.png") is None
+
+
+def test_preview_check_flags_missing_small_and_fake(tmp_path):
+    write_png(tmp_path / "good.png", 1275, 1650)
+    write_png(tmp_path / "small.png", 600, 800)
+    (tmp_path / "fake.png").write_text("text")
+    p = parse_product(raw("abc", preview_files=["good.png", "small.png", "fake.png", "gone.png"]))
+    good, problems = check_previews(p, tmp_path)
+    assert good == ["good.png"]
+    joined = " ".join(problems)
+    assert "too small" in joined and "not a readable" in joined and "not found" in joined
+
+
+def test_failing_products_are_left_out_of_promos(tmp_path):
+    write_png(tmp_path / "p1.png", 1275, 1650)
+    products = [
+        parse_product(raw("good", preview_files=["p1.png"])),
+        parse_product(raw("deadlink", preview_files=["p1.png"])),
+        parse_product(raw("nopics", preview_files=["missing.png"])),
+        parse_product(raw("unverified", preview_files=["p1.png", "missing.png"])),
+    ]
+    import urllib.error
+    fetch = fake_gumroad({
+        STORE + "good": (200, "<title>Good Pack</title>"),
+        STORE + "nopics": (200, "<title>Nopics Pack</title>"),
+        STORE + "unverified": urllib.error.URLError("offline"),
+    })
+    checks = run_checks(products, tmp_path, fetch=fetch)
+    assert [pid for pid, c in checks.items() if c.promotable] == ["good", "unverified"]
+    kit = plan_day(products, date(2026, 3, 1), History(), checks)
+    assert {r.script.product_id for r in kit.promos} == {"good", "unverified"}
+    text = " ".join(kit.warnings)
+    assert "deadlink: Gumroad link dead" in text
+    assert "nopics: left out" in text
+    assert "unverified: Gumroad link unreachable" in text
+    # Only previews that passed are used in the edit notes.
+    unverified = next(r for r in kit.promos if r.script.product_id == "unverified")
+    assert not any("missing.png" in n for n in unverified.script.visual_notes)
+
+
+def test_no_link_check_flag_skips_network(catalog, tmp_path, monkeypatch):
+    def boom(url):
+        raise AssertionError("network used")
+    monkeypatch.setattr("contentkit.checks.http_fetch", boom)
+    out = tmp_path / "kits"
+    assert main(["--catalog", str(catalog), "--date", "2026-11-21", "--out", str(out),
+                 "--history", str(out / "h.json"), "--no-link-check"]) == 0
+    assert "not checked" in (out / "2026-11-21.md").read_text()

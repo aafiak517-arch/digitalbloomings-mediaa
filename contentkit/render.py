@@ -15,6 +15,15 @@ PLATFORM_LABELS = {
 }
 
 
+LINK_LABELS = {
+    "ok": "live",
+    "mismatch": "live, title doesn't match",
+    "dead": "DEAD (404)",
+    "unreachable": "not verified",
+    "skipped": "not checked",
+}
+
+
 def to_markdown(kit: DailyKit) -> str:
     out = [f"# Daily content kit: {kit.day.strftime('%A, %B %-d, %Y')}", ""]
     out.append(f"{len(kit.promos)} promotional + {len(kit.educational)} educational reels. "
@@ -23,6 +32,15 @@ def to_markdown(kit: DailyKit) -> str:
     if kit.warnings:
         out.append("## Fix before editing")
         out += [f"- {w}" for w in kit.warnings]
+        out.append("")
+    if kit.checks is not None:
+        out.append("## Pre-flight checks")
+        out.append("| Product | Gumroad link | HD previews | Promo today? |")
+        out.append("|---|---|---|---|")
+        for pid, c in kit.checks.items():
+            link = LINK_LABELS.get(c.link_status, c.link_status)
+            previews = f"{len(c.good_previews)} ok" + (f", {len(c.preview_problems)} problem(s)" if c.preview_problems else "")
+            out.append(f"| {pid} | {link} | {previews} | {'eligible' if c.promotable else 'no, fix first'} |")
         out.append("")
     if kit.promos:
         out.append("## Products promoted today")
@@ -64,6 +82,12 @@ def to_json(kit: DailyKit) -> str:
     data = {
         "date": kit.day.isoformat(),
         "warnings": kit.warnings,
+        "checks": None if kit.checks is None else {
+            pid: {"link_status": c.link_status, "link_detail": c.link_detail,
+                  "good_previews": c.good_previews, "preview_problems": c.preview_problems,
+                  "promotable": c.promotable}
+            for pid, c in kit.checks.items()
+        },
         "reels": [
             {
                 "number": r.number,

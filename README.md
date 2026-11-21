@@ -39,6 +39,23 @@ This writes `kits/<date>.md` (the work sheet) and `kits/<date>.json` (the same
 data for automation). `--record` saves the picks to `kits/history.json` so the
 next day rotates to different products, angles and topics.
 
+### Pre-flight checks (run automatically)
+
+Before planning, every product is checked:
+
+- **Gumroad link:** the page is fetched live. A 404 (deleted or unpublished
+  product) keeps it out of today's promos. If the page title doesn't match the
+  product name, it is flagged as a possible wrong link. If Gumroad can't be
+  reached, the product stays in but is marked "not verified", so check that
+  link by hand. Use `--no-link-check` when offline.
+- **Previews:** each `preview_files` path (relative to the catalog file) must
+  exist, be a real PNG or JPEG, and be at least 1080 px on its short side. Only
+  passing previews go into the edit notes. A product with none is left out of
+  promos.
+
+The kit opens with a pre-flight table showing which products are eligible
+today and what to fix.
+
 ### How reels are picked
 
 - **Promos:** two different products a day. Products inside their selling

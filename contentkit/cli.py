@@ -11,6 +11,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from .checks import run_checks
 from .planner import History, plan_day, record
 from .products import CatalogError, load_catalog
 from .render import to_json, to_markdown
@@ -25,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default="kits", help="output folder (default: kits)")
     ap.add_argument("--history", default="kits/history.json",
                     help="rotation history file (default: kits/history.json)")
+    ap.add_argument("--no-link-check", action="store_true",
+                    help="skip fetching Gumroad links (offline use); previews are still checked")
     ap.add_argument("--record", action="store_true",
                     help="save today's picks to history so tomorrow rotates")
     args = ap.parse_args(argv)
@@ -33,7 +36,9 @@ def main(argv: list[str] | None = None) -> int:
         day = date.fromisoformat(args.date) if args.date else date.today()
         products = load_catalog(args.catalog)
         history = History.load(args.history)
-        kit = plan_day(products, day, history)
+        catalog_dir = Path(args.catalog).resolve().parent
+        checks = run_checks(products, catalog_dir, check_links=not args.no_link_check)
+        kit = plan_day(products, day, history, checks)
     except (CatalogError, ScriptTooLongError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

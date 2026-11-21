@@ -14,10 +14,11 @@ History lives in a small JSON file so rotation survives between runs.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 
+from .checks import CheckResult
 from .platforms import PlatformPost, build_posts
 from .products import Product
 from .scripts import (TOPICS, TOPICS_BY_ID, ReelScript, angles_for,
@@ -67,6 +68,7 @@ class DailyKit:
     day: date
     reels: list[Reel]
     warnings: list[str]
+    checks: dict[str, CheckResult] | None = None
 
     @property
     def promos(self) -> list[Reel]:
@@ -113,13 +115,24 @@ def choose_topics(day: date, history: History, count: int = EDUCATIONAL_PER_DAY)
     return ranked[:count]
 
 
-def plan_day(products: list[Product], day: date, history: History) -> DailyKit:
+def plan_day(products: list[Product], day: date, history: History,
+             checks: dict[str, CheckResult] | None = None) -> DailyKit:
+    """Plan the day. With `checks` (see contentkit.checks), products whose
+    link is dead or that have no usable HD preview are left out, and only
+    previews that passed are used in the visual notes."""
     warnings: list[str] = []
+    if checks is not None:
+        for p in products:
+            warnings += checks[p.id].messages()
+        products = [
+            replace(p, preview_files=tuple(checks[p.id].good_previews))
+            for p in products if checks[p.id].promotable
+        ]
     ranked = sorted(products, key=lambda p: _product_priority(p, day, history))
     chosen = ranked[:PROMOS_PER_DAY]
     if len(chosen) < PROMOS_PER_DAY:
         warnings.append(
-            f"Only {len(chosen)} product(s) in the catalog; add more to run "
+            f"Only {len(chosen)} product(s) ready to promote; add or fix products to run "
             f"{PROMOS_PER_DAY} different promos a day."
         )
 
@@ -129,7 +142,7 @@ def plan_day(products: list[Product], day: date, history: History) -> DailyKit:
         angle = choose_angle(product, day, history, used_today)
         used_today.add(angle)
         script = build_promo(product, angle, day)
-        if not product.preview_files:
+        if checks is None and not product.preview_files:
             warnings.append(f"{product.id}: no preview_files listed; export real PDF pages first.")
         reels.append(Reel(len(reels) + 1, script, build_posts(script, product)))
 
@@ -138,7 +151,7 @@ def plan_day(products: list[Product], day: date, history: History) -> DailyKit:
         script = build_educational(topic)
         reels.append(Reel(len(reels) + 1, script, build_posts(script, None, topic.hashtags)))
 
-    return DailyKit(day=day, reels=reels, warnings=warnings)
+    return DailyKit(day=day, reels=reels, warnings=warnings, checks=checks)
 
 
 def record(kit: DailyKit, history: History) -> None:
