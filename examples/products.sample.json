@@ -1,0 +1,35 @@
+{
+  "_note": "Template. Replace every your-store gumroad_url with the exact link of your real Gumroad product. The tool refuses to run until you do, so no promo ever ships with a made-up link.",
+  "products": [
+    {
+      "id": "abc-tracing",
+      "name": "ABC Tracing Workbook",
+      "gumroad_url": "https://your-store.gumroad.com/l/abctracing",
+      "ages": "3-5",
+      "pages": 52,
+      "highlights": ["Uppercase and lowercase tracing", "Beginning sound pictures on every page"],
+      "keywords": ["abc tracing", "preschool worksheets"],
+      "preview_files": ["previews/abc-tracing/p01.png", "previews/abc-tracing/p14.png", "previews/abc-tracing/p30.png"]
+    },
+    {
+      "id": "christmas-pack",
+      "name": "Christmas Activity Pack",
+      "gumroad_url": "https://your-store.gumroad.com/l/christmaspack",
+      "ages": "3-7",
+      "pages": 40,
+      "highlights": ["Color by number ornaments", "Count and trace Christmas trees"],
+      "keywords": ["christmas printables", "holiday activities"],
+      "season": {"start": "11-15", "end": "12-24"}
+    },
+    {
+      "id": "thanksgiving-pack",
+      "name": "Thanksgiving Fun Pack",
+      "gumroad_url": "https://your-store.gumroad.com/l/thanksgivingpack",
+      "ages": "3-6",
+      "pages": 30,
+      "highlights": ["Turkey counting mats", "Gratitude coloring pages"],
+      "keywords": ["thanksgiving printables"],
+      "season": {"start": "11-01", "end": "11-26"}
+    }
+  ]
+}
