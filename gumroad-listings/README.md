@@ -14,3 +14,4 @@ Listing kits for Digital Bloomings Kids products that are not on Gumroad yet. Ea
 | Sight Words Workbook (Pre-K & Kindergarten, Dolch Pre-Primer + Primer) | [`sight-words-workbook-dolch/`](sight-words-workbook-dolch/) | Sight-Words-Workbook-PreK-Kindergarten-Dolch.pdf | $6.99 |
 | Winter Break Boredom Busters | [`winter-break-boredom-busters/`](winter-break-boredom-busters/) | Winter-Break-Boredom-Busters.pdf | $5.99 |
 | Winter Preschool Learning Pack | [`winter-preschool-learning-pack/`](winter-preschool-learning-pack/) | Winter-Preschool-Learning-Pack.pdf | $4.99 |
+| Kindergarten Readiness Workbook | [`kindergarten-readiness-workbook/`](kindergarten-readiness-workbook/) | Kindergarten-Readiness-Workbook.pdf | $6.99 |
